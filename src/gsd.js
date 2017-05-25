@@ -39,12 +39,12 @@ const defaultOptions = {
  * @param {Number} [options.derivativeThreshold = -1] - Filters based on the amplitude of the first derivative
  * @return {Array<Object>}
  */
-function gsd(x, yIn, options) {
+function gsd(x, yIn, options = {}) {
     options = extend({}, defaultOptions, options);
     let sgOptions = options.sgOptions;
     const y = [].concat(yIn);
 
-    if (!('noiseLevel' in options)) {
+    if (!options.noiseLevel) {
         // We have to know if x is equally spaced
         var maxDx = 0,
             minDx = Number.MAX_VALUE,
@@ -70,27 +70,24 @@ function gsd(x, yIn, options) {
         yCorrection.m = -1;
         yCorrection.b *= -1;
     }
-
     for (let i = 0; i < y.length; i++) {
         y[i] = yCorrection.m * y[i] - yCorrection.b;
+        if (y[i] < 0) y[i] = 0;
     }
 
-    for (let i = 0; i < y.length; i++) {
-        if (y[i] < 0) {
-            y[i] = 0;
-        }
-    }
     // If the max difference between delta x is less than 5%, then, we can assume it to be equally spaced variable
-    let Y = y;
+    let y1 = y;
     let dY, ddY;
     if ((maxDx - minDx) / maxDx < 0.05) {
-        if (options.smoothY)
-            Y = SG(y, x[1] - x[0], {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 0});
+        if (options.smoothY) {
+            y1 = SG(y, x[1] - x[0], {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 0});
+        }
         dY = SG(y, x[1] - x[0], {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 1});
         ddY = SG(y, x[1] - x[0], {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 2});
     } else {
-        if (options.smoothY)
-            Y = SG(y, x, {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 0});
+        if (options.smoothY) {
+            y1 = SG(y, x, {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 0});
+        }
         dY = SG(y, x, {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 1});
         ddY = SG(y, x, {windowSize: sgOptions.windowSize, polynomial: sgOptions.polynomial, derivative: 2});
     }
@@ -99,27 +96,27 @@ function gsd(x, yIn, options) {
     const dx = x[1] - x[0];
     var maxDdy = 0;
     var maxY = 0;
-    for (let i = 0; i < Y.length; i++) {
+    for (let i = 0; i < y1.length; i++) {
         if (Math.abs(ddY[i]) > maxDdy) {
             maxDdy = Math.abs(ddY[i]);
         }
-        if (Math.abs(Y[i]) > maxY) {
-            maxY = Math.abs(Y[i]);
+        if (Math.abs(y1[i]) > maxY) {
+            maxY = Math.abs(y1[i]);
         }
     }
 
     var lastMax = null;
     var lastMin = null;
-    var minddY = new Array(Y.length - 2);
-    var intervalL = new Array(Y.length);
-    var intervalR = new Array(Y.length);
-    var broadMask = new Array(Y.length - 2);
+    var minddY = new Array(y1.length - 2);
+    var intervalL = new Array(y1.length);
+    var intervalR = new Array(y1.length);
+    var broadMask = new Array(y1.length - 2);
     var minddYLen = 0;
     var intervalLLen = 0;
     var intervalRLen = 0;
     var broadMaskLen = 0;
     // By the intermediate value theorem We cannot find 2 consecutive maximum or minimum
-    for (let i = 1; i < Y.length - 1; ++i) {
+    for (let i = 1; i < y1.length - 1; ++i) {
 
         // filter based on derivativeThreshold
         if (Math.abs(dY[i]) > options.derivativeThreshold) {
@@ -191,11 +188,11 @@ function gsd(x, yIn, options) {
         }
 
         if (possible !== -1) {
-            if (Math.abs(Y[minddY[j]]) > options.minMaxRatio * maxY) {
+            if (Math.abs(y1[minddY[j]]) > options.minMaxRatio * maxY) {
                 signals[signalsLen++] = {
                     index: minddY[j],
                     x: frequency,
-                    y: (Y[minddY[j]] + yCorrection.b) / yCorrection.m,
+                    y: (y1[minddY[j]] + yCorrection.b) / yCorrection.m,
                     width: Math.abs(intervalR[possible].x - intervalL[possible].x), //widthCorrection
                     soft: broadMask[j]
                 };
@@ -204,8 +201,8 @@ function gsd(x, yIn, options) {
                     signals[signalsLen - 1].right = intervalR[possible];
                 }
                 if (options.heightFactor) {
-                    let yLeft = Y[intervalL[possible].index];
-                    let yRight = Y[intervalR[possible].index];
+                    let yLeft = y1[intervalL[possible].index];
+                    let yRight = y1[intervalR[possible].index];
                     signals[signalsLen - 1].height = options.heightFactor * (signals[signalsLen - 1].y - ((yLeft + yRight) / 2));
                 }
             }
@@ -213,8 +210,9 @@ function gsd(x, yIn, options) {
     }
     signals.length = signalsLen;
 
-    if (options.realTopDetection)
-        realTopDetection(signals, X, Y);
+    if (options.realTopDetection) {
+        realTopDetection(signals, X, y1);
+    }
 
     //Correct the values to fit the original spectra data
     for (let j = 0; j < signals.length; j++) {
@@ -230,15 +228,17 @@ function gsd(x, yIn, options) {
 }
 
 function getNoiseLevel(y) {
-    var mean = 0, stddev = 0;
+    var mean = 0,
+        stddev = 0;
     var length = y.length;
     for (let i = 0; i < length; ++i) {
         mean += y[i];
     }
     mean /= length;
     var averageDeviations = new Array(length);
-    for (let i = 0; i < length; ++i)
+    for (let i = 0; i < length; ++i) {
         averageDeviations[i] = Math.abs(y[i] - mean);
+    }
     averageDeviations.sort();
     if (length % 2 === 1) {
         stddev = averageDeviations[(length - 1) / 2] / 0.6745;

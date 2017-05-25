@@ -33,11 +33,10 @@ describe('Global spectra deconvolution simple simulated spectrum', function () {
         const fourth = size / 11;
         var times = new Array(size);
         var tic = new Array(size);
-        console.log("here2");
 
         for (var i = 0; i < size; ++i) {
             times[i] = i;
-            tic[i] = lorentzian(i, fourth) + 2* lorentzian(i, 2*fourth) + lorentzian(i, 3*fourth) + 2* lorentzian(i, 4*fourth) + lorentzian(i, 5*fourth)+ 2* lorentzian(i, 6*fourth) + lorentzian(i, 7*fourth)+ 2* lorentzian(i, 8*fourth) + lorentzian(i, 9*fourth)+ 2* lorentzian(i, 10*fourth);
+            tic[i] = lorentzian(i, fourth) + 2 * lorentzian(i, 2 * fourth) + lorentzian(i, 3 * fourth) + 2 * lorentzian(i, 4 * fourth) + lorentzian(i, 5 * fourth) + 2 * lorentzian(i, 6 * fourth) + lorentzian(i, 7 * fourth) + 2 * lorentzian(i, 8 * fourth) + lorentzian(i, 9 * fourth) + 2 * lorentzian(i, 10 * fourth);
         }
         var ans = gsd(times, tic, {
             noiseLevel: 0,
